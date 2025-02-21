@@ -1,0 +1,16 @@
+{
+  "name": "youtweet",
+  "version": "1.0.0",
+  "description": "a youtube like app with integrated twitter",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "js",
+    "node",
+    "mern"
+  ],
+  "author": "Harsh",
+  "license": "ISC"
+}
