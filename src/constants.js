@@ -1,1 +1,2 @@
-export const DB_NAME = "YouTweet";
+const DB_NAME = `youtweet_db`;
+export {DB_NAME};

@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "-r dotenv/config --experimental-json-modules"
+    "dev": "node -r dotenv/config --experimental-json-modules src/index.js"
   },
   "keywords": [
     "js",

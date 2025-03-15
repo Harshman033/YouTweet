@@ -7,6 +7,8 @@ dotenv.config({
     paths : './env'
 });
 
+
+
 dbConnect()
 .then(()=>{
     app.listen(process.env.PORT||8080, ()=>{
@@ -14,7 +16,6 @@ dbConnect()
     })
     app.on('error', (error)=>{
         console.log("error on listening to the port: ", error);
-        throw error
     })
 })
 .catch((error)=>{
