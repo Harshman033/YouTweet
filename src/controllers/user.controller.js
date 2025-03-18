@@ -6,26 +6,22 @@ import { ApiResponse } from '../utils/apiResponse.js';
 
 const registerUser = asyncHandler( async (req, res)=>{
    const {username, email, fullName, password} = req.body;
-   console.log('Email:', email);
    if(
       [username, email, fullName, password].some(field => field?.trim() === '')
    ){
       throw new ApiError(400, "All fields are required")
    }
   
-   console.log(`User : ${User}`)
 
-   const existedUser = User.findOne({
+   const existedUser = await User.findOne({
          $or : [{ username }, { email }]
    })
 
-   console.log(`Exusted User : ${existedUser}`)
 
    if(existedUser){
      throw new ApiError(409, "User with same email or username already exists")
    }
-   
-   console.log(`req.files ${req.files}`)
+
    const avatarLocalPath = req.files?.avatar[0].path;
    const coverImageLocalPath = req.files?.coverImage[0].path;
 
