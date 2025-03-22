@@ -69,7 +69,7 @@ const registerUser = asyncHandler( async (req, res)=>{
       coverImage : coverImage?.url || ""
    })
 
-   const createdUser = await User.findById(user._id).select("-password, -refreshToken");
+   const createdUser = await User.findById(user._id).select("-password -refreshToken");
 
    if(!createdUser){
       throw new ApiError(500, "Something went wrong while registering the user")
@@ -192,4 +192,159 @@ const regenerateAccessToken = asyncHandler(async (req, res) => {
    throw new ApiError(401, error?.message || "invalid refresh token")
   }
 })
-export {registerUser, loginUser, logoutUser, regenerateAccessToken }
+
+const changePassword = asyncHandler(async (req, res) => {
+   try {
+      const {oldPassword, newPassword } = req.body;
+   
+      const user = await User.findById(req.user._id);
+   
+      const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+   
+      if(!isPasswordCorrect){
+         throw new ApiError(400, "Incorrect password")
+      }
+   
+     user.password = newPassword;
+     await user.save({validateBeforeSave : false});
+
+     return res.status(200)
+     .json(
+      new ApiResponse(200, {}, "Password changed successfully!")
+     )
+   } catch (error) {
+      throw new ApiError(400, error?.message || "Incorrect Password")
+   }
+
+
+});
+
+const getCurrentUser = asyncHandler(async (req, res) => {
+   return res.status(200)
+   .json(
+      new ApiResponse(200, req.user, "User details fetched successfully" )
+   )
+});
+
+const updateUserProfile = asyncHandler(async (req, res) => {
+  try {
+    const {fullName, email, username} = req.body;
+ 
+    if(!(fullName || email || username)){
+       throw new ApiError(400, "All fields are required")
+    }
+    const updatedUser = await User.findByIdAndUpdate(
+       req.user._id,
+       {
+          $set : {
+             fullName, username, email
+          }
+       }
+    ,
+    {
+       new : true
+    }
+    ).select("-password -refreshToken")
+ 
+    if(!updatedUser){
+       throw new ApiError(500, "Something went wrong while updating the user details")
+    }
+ 
+ 
+    return res.status(200)
+    .json(
+       new ApiResponse(200, updatedUser, "Profile updated successfully!")
+    )
+  } catch (error) {
+   throw new ApiError(400, error?.message || "All fields are required to be filled to be updated")
+  }
+   
+});
+
+const updateAvatar = asyncHandler(async (req, res) => {
+  try {
+    const avatarPath = req.file?.path;
+ 
+ if(!avatarPath){
+    throw new ApiError(400, "Please upload the image")
+ }
+ 
+    const newAvatar = await uploadOnCloudinary(avatarPath);
+ 
+    if(!newAvatar.url){
+       throw new ApiError(500, "Somehting went wrong while uploading file to cloudinary")
+    }
+ 
+    const updatedUser = await User.findByIdAndUpdate(
+       req.user?._id,
+       {
+          $set : {
+             avatar : newAvatar.url
+          }
+       },
+       {
+          new : true
+       }
+    ).select("-password -refreshToken")
+    
+    if(!updatedUser){
+       throw new ApiError(500, "Somehting went wrong whilel updating avatar")
+    }
+ 
+    return res.status(200)
+    .json(
+       new ApiResponse(200,
+          updatedUser,
+          "User avatar updated successfully!"
+       )
+    )
+  } catch (error) {
+   throw new ApiError(400, error?.message || "Please upload a file first")
+  }
+});
+
+
+const updateCoverImage = asyncHandler(async (req, res) => {
+   try {
+     const coverImagePath = req.file?.path;
+  
+  if(!coverImagePath){
+     throw new ApiError(400, "Please upload the image")
+  }
+  
+     const newCoverImage = await uploadOnCloudinary(coverImagePath);
+  
+     if(!newCoverImage.url){
+        throw new ApiError(500, "Somehting went wrong while uploading file to cloudinary")
+     }
+  
+     const updatedUser = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+           $set : {
+            coverImage : newCoverImage.url
+           }
+        },
+        {
+           new : true
+        }
+     ).select("-password -refreshToken")
+     
+     if(!updatedUser){
+        throw new ApiError(500, "Somehting went wrong whilel updating coverImage")
+     }
+  
+     return res.status(200)
+     .json(
+        new ApiResponse(200,
+           updatedUser,
+           "CoverImage updated successfully!"
+        )
+     )
+   } catch (error) {
+    throw new ApiError(400, error?.message || "Please upload a file first")
+   }
+ });
+
+
+export {registerUser, loginUser, logoutUser, regenerateAccessToken, changePassword, getCurrentUser, updateUserProfile, updateAvatar, updateCoverImage }
