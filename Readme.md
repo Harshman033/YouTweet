@@ -1,4 +1,4 @@
-# yOuTweet  
+# YouTweet  
 
 A **YouTube-like application** backend built using the **MERN stack**, designed to improve backend development skills. This project focuses on **authentication, file uploads, and data aggregation** using **MongoDB aggregation pipelines**.  
 
