@@ -1,7 +1,7 @@
 import {asyncHandler} from '../utils/asyncHandler.js';
 import {ApiError} from '../utils/ApiError.js';
 import {User} from '../models/user.model.js';
-import { uploadOnCloudinary } from '../utils/cloudinary.js';
+import { deleteFromCloudinary, uploadOnCloudinary } from '../utils/cloudinary.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 import jwt from 'jsonwebtoken';
 
@@ -263,18 +263,33 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 
 const updateAvatar = asyncHandler(async (req, res) => {
   try {
+
+  const user = await User.findById(req.user._id).select("-password -refreshToken");
+  if(!user){
+   throw new ApiError(400, "Unauthorised request")
+  }
+
+    
     const avatarPath = req.file?.path;
+    
  
- if(!avatarPath){
+  if(!avatarPath){
     throw new ApiError(400, "Please upload the image")
- }
- 
+  }
+   console.log(req.user.avatar);
+
+   if (req.user.avatar) {
+      const fileDeleteResult = await deleteFromCloudinary(req.user.avatar);
+      console.log(fileDeleteResult);
+  }
+
+   
     const newAvatar = await uploadOnCloudinary(avatarPath);
  
-    if(!newAvatar.url){
-       throw new ApiError(500, "Somehting went wrong while uploading file to cloudinary")
-    }
- 
+    if (!newAvatar || !newAvatar.url) {
+      throw new ApiError(500, "Something went wrong while uploading file to Cloudinary");
+  }
+
     const updatedUser = await User.findByIdAndUpdate(
        req.user?._id,
        {
@@ -288,7 +303,7 @@ const updateAvatar = asyncHandler(async (req, res) => {
     ).select("-password -refreshToken")
     
     if(!updatedUser){
-       throw new ApiError(500, "Somehting went wrong whilel updating avatar")
+       throw new ApiError(500, "Something went wrong while updating avatar")
     }
  
     return res.status(200)
@@ -306,45 +321,186 @@ const updateAvatar = asyncHandler(async (req, res) => {
 
 const updateCoverImage = asyncHandler(async (req, res) => {
    try {
-     const coverImagePath = req.file?.path;
-  
-  if(!coverImagePath){
-     throw new ApiError(400, "Please upload the image")
-  }
-  
-     const newCoverImage = await uploadOnCloudinary(coverImagePath);
-  
-     if(!newCoverImage.url){
-        throw new ApiError(500, "Somehting went wrong while uploading file to cloudinary")
-     }
-  
-     const updatedUser = await User.findByIdAndUpdate(
-        req.user?._id,
-        {
-           $set : {
-            coverImage : newCoverImage.url
-           }
-        },
-        {
-           new : true
-        }
-     ).select("-password -refreshToken")
+
+      const user = await User.findById(req.user._id).select("-password -refreshToken");
+      if(!user){
+       throw new ApiError(400, "Unauthorised request")
+      }
+    
+        
+      const coverImagePath = req.file?.path;
+        
      
-     if(!updatedUser){
-        throw new ApiError(500, "Somehting went wrong whilel updating coverImage")
-     }
-  
-     return res.status(200)
-     .json(
-        new ApiResponse(200,
-           updatedUser,
-           "CoverImage updated successfully!"
+      if(!coverImagePath){
+        throw new ApiError(400, "Please upload the image")
+      }
+    
+       if (req.user.coverImage && req.user.coverImage !== "" ) {
+          const fileDeleteResult = await deleteFromCloudinary(req.user.coverImage);
+          console.log(fileDeleteResult);
+      }
+    
+      const newCoverImage = await uploadOnCloudinary(coverImagePath);
+     
+      if (!newCoverImage || !newCoverImage.url) {
+          throw new ApiError(500, "Something went wrong while uploading file to Cloudinary");
+      }
+    
+        const updatedUser = await User.findByIdAndUpdate(
+           req.user?._id,
+           {
+              $set : {
+                 coverImage : newCoverImage.url
+              }
+           },
+           {
+              new : true
+           }
+        ).select("-password -refreshToken")
+        
+        if(!updatedUser){
+           throw new ApiError(500, "Somehting went wrong while updating coverImage")
+        }
+     
+        return res.status(200)
+        .json(
+           new ApiResponse(200,
+              updatedUser,
+              "CoverImage updated successfully!"
+           )
         )
-     )
-   } catch (error) {
-    throw new ApiError(400, error?.message || "Please upload a file first")
-   }
+      } catch (error) {
+       throw new ApiError(400, error?.message || "Please upload a file first")
+      }
  });
 
+ const userChannelProfile = asyncHandler(async (req, res) => {
+   const {username} = req.params;
 
-export {registerUser, loginUser, logoutUser, regenerateAccessToken, changePassword, getCurrentUser, updateUserProfile, updateAvatar, updateCoverImage }
+   if(!username){
+      throw new ApiError(400, "Username is missing")
+   }
+
+   const channel = await User.aggregate([
+      {
+         $match : {
+            username : username?.toLowerCase()
+         }
+      },
+      {
+         $lookup : {
+           from : "subscriptions",
+           localField : "_id",
+           foreignField : "channel",
+           as : "subscribers"
+         }
+
+      },
+      {
+         $lookup : {
+            from : "subscriptions",
+            localField : "_id",
+            foreignField : "subscribers",
+            as : "subscribedTo"
+          }
+      },
+      {
+         $addFields : {
+            subscribersCount :{
+               $size : "$subscribers"
+            },
+            subscribedToCount : {
+                $size : "$subscribedTo"
+            },
+            
+            isSubscribed : {
+                  $cond : {
+                     if : {$in : [req.user?._id, "$subscribers.subscriber"]},
+                     then : true,
+                     else : false
+                  }
+               }
+            
+         }
+      },
+      {
+         $project : {
+            fullName : 1,
+            username : 1,
+            avatar : 1,
+            coverImage : 1,
+            subscribersCount : 1,
+            subscribedToCount : 1
+         }
+      }
+   ])
+
+   if(!channel?.length){
+      throw new ApiError(404, "Channel not found")
+   }
+
+   return res.status(200)
+   .json(
+      new ApiResponse(
+         200,
+         channel[0],
+         "User channel fetched successfully!"
+      )
+   )
+ });
+
+ const watchHistory = asyncHandler(async (req, res) => {
+   const user = await User.aggregate([
+     {
+      $match : {
+         id : new mongoose.Types.ObjectId(req.user?._id)
+      },
+     },
+     {
+      $lookup : {
+         from : "videos",
+         localField : "watchHistory",
+         foreignField : "_id",
+         as : "watchHistory",
+         pipeline : [
+            {
+               $lookup : {
+                  from : "users",
+                  localField : "owner",
+                  foreignField : "_id",
+                  as : "owner",
+                  pipeline : [
+                    {
+                      $project : {
+                        username : 1,
+                        fullName : 1,
+                        avatar : 1
+                     }
+                    }
+                    
+                  ]
+               }
+            },
+            {
+               $addFields : {
+                  owner : {
+                     $first : "$owner"
+                  }
+               }
+            }
+           
+         ]
+      },
+   }
+   ])
+
+   return res.status(200)
+   .json(
+      new ApiResponse(200,
+         user[0].watchHistory,
+         "Watch history fetched successfully!"
+      )
+   )
+ });
+
+export {registerUser, loginUser, logoutUser, regenerateAccessToken, changePassword, getCurrentUser, updateUserProfile, updateAvatar, updateCoverImage, userChannelProfile, watchHistory}
